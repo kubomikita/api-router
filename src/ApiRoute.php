@@ -241,7 +241,8 @@ class ApiRoute extends ApiRouteSpec implements IRouter
 			return Strings::upper($request->getHeader('X-HTTP-Method-Override'));
 		}
 
-		if ($method = Strings::upper($request->getQuery('__apiRouteMethod'))) {
+		if ($request->getQuery('__apiRouteMethod') !== null) {
+			$method = Strings::upper($request->getQuery('__apiRouteMethod'));
 			if (isset($this->actions[$method])) {
 				return $method;
 			}
@@ -259,7 +260,7 @@ class ApiRoute extends ApiRouteSpec implements IRouter
 	/**
 	 * Maps HTTP request to a Request object.
 	 */
-	public function match(Nette\Http\IRequest $httpRequest): ?Request
+	public function match(Nette\Http\IRequest $httpRequest): ?array
 	{
 		/**
 		 * ApiRoute can be easily disabled
@@ -278,7 +279,7 @@ class ApiRoute extends ApiRouteSpec implements IRouter
 		$order = &$this->placeholder_order;
 		$parameters = $this->parameters;
 
-		$mask = preg_replace_callback('/(<(\w+)>)|\[|\]/', function ($item) use (&$order, $parameters) {
+		$mask = $url->getBasePath() . preg_replace_callback('/(<(\w+)>)|\[|\]/', function ($item) use (&$order, $parameters) {
 			if ($item[0] == '[' || $item[0] == ']') {
 				if ($item[0] == '[') {
 					$order[] = null;
@@ -360,30 +361,39 @@ class ApiRoute extends ApiRouteSpec implements IRouter
 			[Request::SECURED => $httpRequest->isSecured()]
 		);
 
+		$request_array = [
+			Nette\Application\UI\Presenter::PRESENTER_KEY => $this->presenter,
+		];
+		$request_array = $request_array + $params;
+
 		/**
 		 * Trigger event - route matches
 		 */
 		$this->onMatch($this, $request);
 
-		return $request;
+		return $request_array;
 	}
 
 
 	/**
 	 * Constructs absolute URL from Request object.
 	 */
-	public function constructUrl(Request $request, Nette\Http\Url $url): ?string
+	//public function constructUrl(Request $request, Nette\Http\Url $url): ?string
+	public function constructUrl(array $params, Nette\Http\UrlScript $refUrl): ?string
 	{
-		if ($this->presenter != $request->getPresenterName()) {
+
+		if ($this->presenter != $params["presenter"]) {
 			return null;
 		}
+		//dumpe($refUrl->getBaseUrl(),$params);
+		$base_url = $refUrl->getBaseUrl();
 
-		$base_url = $url->getBaseUrl();
-
-		$action = $request->getParameter('action');
-		$parameters = $request->getParameters();
+		$action = $params['action'];
+		$parameters = $params;
 		unset($parameters['action']);
+		unset($parameters["presenter"]);
 		$path = ltrim($this->getPath(), '/');
+
 
 		if (array_search($action, $this->actions, true) === false) {
 			return null;
